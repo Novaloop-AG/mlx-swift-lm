@@ -552,11 +552,12 @@ private class NemotronHBlock: Module {
     let blockType: NemotronHBlockType
 
     @ModuleInfo(key: "norm") var norm: RMSNorm
-    // Use "mixer" as key for all - weights use backbone.layers.N.mixer.* for all block types
-    @ModuleInfo(key: "mixer") var mamba: NemotronHMamba2Mixer?
-    @ModuleInfo(key: "mixer") var selfAttn: NemotronHAttention?
-    @ModuleInfo(key: "mixer") var mlp: NemotronHMLP?
-    @ModuleInfo(key: "mixer") var moe: NemotronHMoE?
+    // Each mixer type uses its own key to avoid MLX-Swift module registration conflicts
+    // Weight key remapping from "mixer" to these keys is done in sanitize()
+    @ModuleInfo(key: "mamba") var mamba: NemotronHMamba2Mixer?
+    @ModuleInfo(key: "self_attn") var selfAttn: NemotronHAttention?
+    @ModuleInfo(key: "mlp") var mlp: NemotronHMLP?
+    @ModuleInfo(key: "moe") var moe: NemotronHMoE?
 
     init(_ args: NemotronHConfiguration, blockType: Character) {
         self.blockType = NemotronHBlockType(from: blockType)
@@ -763,7 +764,21 @@ public class NemotronHModel: Module, LLMModel, KVCacheDimensionProvider, LoRAMod
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         var sanitized = [String: MLXArray]()
 
+        // Build layer type mapping from pattern
+        let pattern = Array(configuration.hybridOverridePattern)
+        func mixerKey(for layerIndex: Int) -> String {
+            guard layerIndex < pattern.count else { return "moe" }
+            switch pattern[layerIndex] {
+            case "M": return "mamba"
+            case "*": return "self_attn"
+            case "-": return "mlp"
+            case "E": return "moe"
+            default: return "moe"
+            }
+        }
+
         for (key, value) in weights {
+            var finalKey = key
             var finalValue = value
 
             // Handle conv1d weight axis swap
@@ -771,12 +786,25 @@ public class NemotronHModel: Module, LLMModel, KVCacheDimensionProvider, LoRAMod
                 finalValue = value.swappedAxes(1, 2)
             }
 
-            sanitized[key] = finalValue
+            // Remap mixer keys to block-specific keys: backbone.layers.{N}.mixer.* -> backbone.layers.{N}.{mamba|self_attn|mlp|moe}.*
+            if key.contains(".mixer.") {
+                // Extract layer index from key like "backbone.layers.5.mixer.in_proj.weight"
+                let parts = key.split(separator: ".")
+                if let layersIdx = parts.firstIndex(of: "layers"),
+                   layersIdx + 1 < parts.count,
+                   let layerNum = Int(parts[layersIdx + 1]) {
+                    let newMixerKey = mixerKey(for: layerNum)
+                    finalKey = key.replacingOccurrences(of: ".mixer.", with: ".\(newMixerKey).")
+                }
+            }
+
+            sanitized[finalKey] = finalValue
         }
 
-        // Stack experts: backbone.layers.{l}.mixer.experts.{e}.{proj}.weight -> backbone.layers.{l}.mixer.switch_mlp.{proj}.weight
+        // Stack experts: backbone.layers.{l}.moe.experts.{e}.{proj}.weight -> backbone.layers.{l}.moe.switch_mlp.{proj}.weight
         for l in 0 ..< configuration.numHiddenLayers {
-            let prefix = "backbone.layers.\(l).mixer"
+            let blockKey = mixerKey(for: l)
+            let prefix = "backbone.layers.\(l).\(blockKey)"
             for (m, n) in [("down_proj", "fc2"), ("up_proj", "fc1")] {
                 if sanitized["\(prefix).experts.0.\(m).weight"] != nil {
                     let toJoin = (0 ..< configuration.nRoutedExperts).compactMap { e in
