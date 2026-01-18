@@ -926,4 +926,74 @@ public struct NemotronHConfiguration: Codable, Sendable {
             timeStepLimitMax = try container.decodeIfPresent(Float.self, forKey: .timeStepLimitMax) ?? Float.infinity
         }
     }
+
+    /// Memberwise initializer for testing
+    public init(
+        vocabSize: Int,
+        hiddenSize: Int,
+        numHiddenLayers: Int,
+        numAttentionHeads: Int,
+        numKeyValueHeads: Int,
+        mambaNumHeads: Int,
+        mambaHeadDim: Int,
+        ssmStateSize: Int,
+        convKernel: Int,
+        nGroups: Int,
+        intermediateSize: Int,
+        moeIntermediateSize: Int,
+        moeSharedExpertIntermediateSize: Int,
+        nRoutedExperts: Int,
+        numExpertsPerTok: Int,
+        hybridOverridePattern: String,
+        layerNormEpsilon: Float = 1e-5,
+        attentionBias: Bool = false,
+        mambaProjBias: Bool = false,
+        mlpBias: Bool = false,
+        useBias: Bool = false,
+        useConvBias: Bool = true,
+        tieWordEmbeddings: Bool = false,
+        ropeTheta: Float = 10000.0,
+        headDim: Int? = nil,
+        nSharedExperts: Int? = nil,
+        nGroup: Int = 1,
+        topkGroup: Int = 1,
+        normTopkProb: Bool = true,
+        routedScalingFactor: Float = 1.0,
+        timeStepLimitMin: Float = 0.0,
+        timeStepLimitMax: Float = .infinity
+    ) {
+        self.modelType = "nemotron_h"
+        self.vocabSize = vocabSize
+        self.hiddenSize = hiddenSize
+        self.numHiddenLayers = numHiddenLayers
+        self.numAttentionHeads = numAttentionHeads
+        self.numKeyValueHeads = numKeyValueHeads
+        self.attentionBias = attentionBias
+        self.mambaNumHeads = mambaNumHeads
+        self.mambaHeadDim = mambaHeadDim
+        self.mambaProjBias = mambaProjBias
+        self.ssmStateSize = ssmStateSize
+        self.convKernel = convKernel
+        self.nGroups = nGroups
+        self.intermediateSize = intermediateSize
+        self.moeIntermediateSize = moeIntermediateSize
+        self.moeSharedExpertIntermediateSize = moeSharedExpertIntermediateSize
+        self.nRoutedExperts = nRoutedExperts
+        self.nSharedExperts = nSharedExperts
+        self.numExpertsPerTok = numExpertsPerTok
+        self.hybridOverridePattern = hybridOverridePattern
+        self.layerNormEpsilon = layerNormEpsilon
+        self.mlpBias = mlpBias
+        self.useBias = useBias
+        self.useConvBias = useConvBias
+        self.tieWordEmbeddings = tieWordEmbeddings
+        self.ropeTheta = ropeTheta
+        self.headDim = headDim
+        self.nGroup = nGroup
+        self.topkGroup = topkGroup
+        self.normTopkProb = normTopkProb
+        self.routedScalingFactor = routedScalingFactor
+        self.timeStepLimitMin = timeStepLimitMin
+        self.timeStepLimitMax = timeStepLimitMax
+    }
 }
